@@ -16,5 +16,4 @@ rvm:
 matrix:
   allow_failures:
     - rvm: 1.8.6
-
 script: "bundle exec rake"
