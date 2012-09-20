@@ -248,4 +248,13 @@ EOT
       # introducing race conditions of tests are run in parallel
     end
   end
+
+  def test_hash_likeness
+    state = JSON.state.new
+    state[:foo] = :bar
+    assert_equal :bar, state[:foo]
+    state_hash = state.to_hash
+    assert_kind_of Hash, state_hash
+    assert_equal :bar, state_hash[:foo]
+  end
 end
