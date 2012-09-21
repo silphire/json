@@ -598,6 +598,23 @@ static VALUE cState_configure(VALUE self, VALUE opts)
     return self;
 }
 
+static int
+ivar_i(st_data_t k, st_data_t v, st_data_t a)
+{
+    ID    id_key = (ID)k;
+    VALUE key = rb_id2str(id_key);
+    VALUE value = (VALUE)v;
+    VALUE hash = (VALUE)a;
+
+    if (rb_is_instance_id(id_key)) {
+        long key_length = RSTRING_LEN(key);
+        if (key_length > 1) {
+            rb_hash_aset(hash, rb_str_intern(rb_str_substr(key, 1, key_length - 1)), value);
+        }
+    }
+    return ST_CONTINUE;
+}
+
 /*
  * call-seq: to_h
  *
@@ -619,6 +636,7 @@ static VALUE cState_to_h(VALUE self)
     rb_hash_aset(result, ID2SYM(i_max_nesting), LONG2FIX(state->max_nesting));
     rb_hash_aset(result, ID2SYM(i_depth), LONG2FIX(state->depth));
     rb_hash_aset(result, ID2SYM(i_buffer_initial_length), LONG2FIX(state->buffer_initial_length));
+    rb_ivar_foreach(self, ivar_i, result);
     return result;
 }
 
@@ -629,12 +647,31 @@ static VALUE cState_to_h(VALUE self)
 */
 static VALUE cState_aref(VALUE self, VALUE name)
 {
-    GET_STATE(self);
+    name = rb_funcall(name, i_to_s, 0);
     if (RTEST(rb_funcall(self, i_respond_to_p, 1, name))) {
         return rb_funcall(self, i_send, 1, name);
     } else {
-        return Qnil;
+        return rb_ivar_get(self, rb_intern_str(rb_str_concat(rb_str_new_cstr("@"), name)));
     }
+}
+
+/*
+* call-seq: []=(name, value)
+*
+* Set the attribute name to value.
+*/
+static VALUE cState_aset(VALUE self, VALUE name, VALUE value)
+{
+    VALUE name_writer;
+
+    name = rb_funcall(name, i_to_s, 0);
+    name_writer = rb_str_cat2(rb_str_dup(name), "=");
+    if (RTEST(rb_funcall(self, i_respond_to_p, 1, name_writer))) {
+        return rb_funcall(self, i_send, 2, name_writer, value);
+    } else {
+        rb_ivar_set(self, rb_intern_str(rb_str_concat(rb_str_new_cstr("@"), name)), value);
+    }
+    return Qnil;
 }
 
 static void generate_json_object(FBuffer *buffer, VALUE Vstate, JSON_Generator_State *state, VALUE obj)
@@ -1327,7 +1364,9 @@ void Init_generator()
     rb_define_method(cState, "configure", cState_configure, 1);
     rb_define_alias(cState, "merge", "configure");
     rb_define_method(cState, "to_h", cState_to_h, 0);
+    rb_define_alias(cState, "to_hash", "to_h");
     rb_define_method(cState, "[]", cState_aref, 1);
+    rb_define_method(cState, "[]=", cState_aset, 2);
     rb_define_method(cState, "generate", cState_generate, 1);
 
     mGeneratorMethods = rb_define_module_under(mGenerator, "GeneratorMethods");
