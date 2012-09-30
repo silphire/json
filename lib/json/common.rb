@@ -382,8 +382,8 @@ module JSON
         anIO = nil
       end
     end
-    opts = JSON.dump_default_options
-    limit and opts.update(:max_nesting => limit)
+    opts = JSON.dump_default_options.dup
+    opts[:max_nesting] = limit
     result = generate(obj, opts)
     if anIO
       anIO.write result

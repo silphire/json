@@ -3,7 +3,9 @@
 
 #include "ruby.h"
 
-#ifndef HAVE_RUBY_RE_H
+#ifdef HAVE_RUBY_RE_H
+#include "ruby/re.h"
+#else
 #include "re.h"
 #endif
 

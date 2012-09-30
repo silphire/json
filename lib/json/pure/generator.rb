@@ -220,6 +220,9 @@ module JSON
         # Configure this State instance with the Hash _opts_, and return
         # itself.
         def configure(opts)
+          for key, value in opts
+            instance_variable_set "@#{key}", value
+          end
           @indent                = opts[:indent] if opts.key?(:indent)
           @space                 = opts[:space] if opts.key?(:space)
           @space_before          = opts[:space_before] if opts.key?(:space_before)

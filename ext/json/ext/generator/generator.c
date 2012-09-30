@@ -12,10 +12,10 @@ static VALUE mJSON, mExt, mGenerator, cState, mGeneratorMethods, mObject,
              eNestingError, CRegexp_MULTILINE, CJSON_SAFE_STATE_PROTOTYPE,
              i_SAFE_STATE_PROTOTYPE;
 
-static ID i_to_s, i_to_json, i_new, i_indent, i_space, i_space_before,
+static ID i_to_s, i_to_sym, i_to_json, i_new, i_indent, i_space, i_space_before,
           i_object_nl, i_array_nl, i_max_nesting, i_allow_nan, i_ascii_only,
           i_quirks_mode, i_pack, i_unpack, i_create_id, i_extend, i_key_p,
-          i_aref, i_send, i_respond_to_p, i_match, i_keys, i_depth,
+          i_send, i_respond_to_p, i_match, i_keys, i_depth,
           i_buffer_initial_length, i_dup;
 
 /*
@@ -501,6 +501,14 @@ static VALUE cState_s_allocate(VALUE klass)
     return Data_Wrap_Struct(klass, NULL, State_free, state);
 }
 
+static VALUE cState_aset(VALUE self, VALUE name, VALUE value);
+
+static int set_each_option_i(VALUE key, VALUE value, VALUE state)
+{
+    cState_aset(state, key, value);
+    return ST_CONTINUE;
+}
+
 /*
  * call-seq: configure(opts)
  *
@@ -517,6 +525,7 @@ static VALUE cState_configure(VALUE self, VALUE opts)
         rb_raise(rb_eArgError, "opts has to be hash like or convertable into a hash");
     }
     opts = tmp;
+    rb_hash_foreach(opts, set_each_option_i, self);
     tmp = rb_hash_aref(opts, ID2SYM(i_indent));
     if (RTEST(tmp)) {
         unsigned long len;
@@ -598,21 +607,16 @@ static VALUE cState_configure(VALUE self, VALUE opts)
     return self;
 }
 
-static int
-ivar_i(st_data_t k, st_data_t v, st_data_t a)
+static void set_state_ivars(VALUE hash, VALUE state)
 {
-    ID    id_key = (ID)k;
-    VALUE key = rb_id2str(id_key);
-    VALUE value = (VALUE)v;
-    VALUE hash = (VALUE)a;
-
-    if (rb_is_instance_id(id_key)) {
-        long key_length = RSTRING_LEN(key);
-        if (key_length > 1) {
-            rb_hash_aset(hash, rb_str_intern(rb_str_substr(key, 1, key_length - 1)), value);
-        }
+    VALUE ivars = rb_obj_instance_variables(state);
+    int i;
+    for (i = 0; i < RARRAY_LEN(ivars); i++) {
+        VALUE key = rb_funcall(rb_ary_entry(ivars, i), i_to_s, 0);
+        long key_len = RSTRING_LEN(key);
+        VALUE value = rb_iv_get(state, StringValueCStr(key));
+        rb_hash_aset(hash, rb_str_intern(rb_str_substr(key, 1, key_len - 1)), value);
     }
-    return ST_CONTINUE;
 }
 
 /*
@@ -625,6 +629,7 @@ static VALUE cState_to_h(VALUE self)
 {
     VALUE result = rb_hash_new();
     GET_STATE(self);
+    set_state_ivars(result, self);
     rb_hash_aset(result, ID2SYM(i_indent), rb_str_new(state->indent, state->indent_len));
     rb_hash_aset(result, ID2SYM(i_space), rb_str_new(state->space, state->space_len));
     rb_hash_aset(result, ID2SYM(i_space_before), rb_str_new(state->space_before, state->space_before_len));
@@ -636,7 +641,6 @@ static VALUE cState_to_h(VALUE self)
     rb_hash_aset(result, ID2SYM(i_max_nesting), LONG2FIX(state->max_nesting));
     rb_hash_aset(result, ID2SYM(i_depth), LONG2FIX(state->depth));
     rb_hash_aset(result, ID2SYM(i_buffer_initial_length), LONG2FIX(state->buffer_initial_length));
-    rb_ivar_foreach(self, ivar_i, result);
     return result;
 }
 
@@ -651,7 +655,7 @@ static VALUE cState_aref(VALUE self, VALUE name)
     if (RTEST(rb_funcall(self, i_respond_to_p, 1, name))) {
         return rb_funcall(self, i_send, 1, name);
     } else {
-        return rb_ivar_get(self, rb_intern_str(rb_str_concat(rb_str_new_cstr("@"), name)));
+        return rb_ivar_get(self, rb_to_id(rb_str_concat(rb_str_new2("@"), name)));
     }
 }
 
@@ -669,7 +673,7 @@ static VALUE cState_aset(VALUE self, VALUE name, VALUE value)
     if (RTEST(rb_funcall(self, i_respond_to_p, 1, name_writer))) {
         return rb_funcall(self, i_send, 2, name_writer, value);
     } else {
-        rb_ivar_set(self, rb_intern_str(rb_str_concat(rb_str_new_cstr("@"), name)), value);
+        rb_ivar_set(self, rb_to_id(rb_str_concat(rb_str_new2("@"), name)), value);
     }
     return Qnil;
 }
@@ -1215,8 +1219,12 @@ static VALUE cState_max_nesting(VALUE self)
 static VALUE cState_max_nesting_set(VALUE self, VALUE depth)
 {
     GET_STATE(self);
-    Check_Type(depth, T_FIXNUM);
-    return state->max_nesting = FIX2LONG(depth);
+    if (RTEST(depth)) {
+        Check_Type(depth, T_FIXNUM);
+        return state->max_nesting = FIX2LONG(depth);
+    } else {
+        return state->max_nesting = 0;
+    }
 }
 
 /*
@@ -1398,6 +1406,7 @@ void Init_generator()
 
     CRegexp_MULTILINE = rb_const_get(rb_cRegexp, rb_intern("MULTILINE"));
     i_to_s = rb_intern("to_s");
+    i_to_sym = rb_intern("to_sym");
     i_to_json = rb_intern("to_json");
     i_new = rb_intern("new");
     i_indent = rb_intern("indent");
@@ -1416,7 +1425,6 @@ void Init_generator()
     i_create_id = rb_intern("create_id");
     i_extend = rb_intern("extend");
     i_key_p = rb_intern("key?");
-    i_aref = rb_intern("[]");
     i_send = rb_intern("__send__");
     i_respond_to_p = rb_intern("respond_to?");
     i_match = rb_intern("match");

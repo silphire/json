@@ -14,6 +14,20 @@
 #include "re.h"
 #endif
 
+#ifdef HAVE_RUBY_ST_H
+#include "ruby/st.h"
+#else
+#include "st.h"
+#endif
+
+#ifndef rb_intern_str
+#define rb_intern_str(string) rb_funcall(string, i_to_sym, 0)
+#endif
+
+#ifndef rb_obj_instance_variables
+#define rb_obj_instance_variables(obj) rb_funcall(obj, rb_intern("instance_variables"), 0)
+#endif
+
 #define option_given_p(opts, key) RTEST(rb_funcall(opts, i_key_p, 1, key))
 
 /* unicode defintions */

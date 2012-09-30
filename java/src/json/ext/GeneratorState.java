@@ -10,10 +10,12 @@ import org.jruby.Ruby;
 import org.jruby.RubyBoolean;
 import org.jruby.RubyClass;
 import org.jruby.RubyHash;
+import org.jruby.RubyHash.RubyHashEntry;
 import org.jruby.RubyInteger;
 import org.jruby.RubyNumeric;
 import org.jruby.RubyObject;
 import org.jruby.RubyString;
+import org.jruby.RubySymbol;
 import org.jruby.anno.JRubyMethod;
 import org.jruby.runtime.Block;
 import org.jruby.runtime.ObjectAllocator;
@@ -21,6 +23,7 @@ import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.Visibility;
 import org.jruby.runtime.builtin.IRubyObject;
 import org.jruby.util.ByteList;
+import java.util.Map;
 
 /**
  * The <code>JSON::Ext::Generator::State</code> class.
@@ -262,6 +265,19 @@ public class GeneratorState extends RubyObject {
         String name = vName.asJavaString();
         if (getMetaClass().isMethodBound(name, true)) {
             return send(context, vName, Block.NULL_BLOCK);
+        } else {
+            return getInstanceVariable(name);
+        }
+    }
+
+    @JRubyMethod(name="[]=", required=2)
+    public IRubyObject op_aset(ThreadContext context, IRubyObject vName, IRubyObject value) {
+        String name = vName.asJavaString();
+        String nameWriter = name + "=";
+        if (getMetaClass().isMethodBound(nameWriter, true)) {
+            return send(context, context.getRuntime().newString(nameWriter), value, Block.NULL_BLOCK);
+        } else {
+            setInstanceVariable(name, value);
         }
         return context.getRuntime().getNil();
     }
@@ -447,6 +463,12 @@ public class GeneratorState extends RubyObject {
      */
     @JRubyMethod
     public IRubyObject configure(ThreadContext context, IRubyObject vOpts) {
+        RubyHash optsHash = vOpts.convertToHash();
+        for (Object entry : optsHash.entrySet()) {
+            RubyHashEntry pair = (RubyHashEntry) entry;
+            setInstanceVariable(((IRubyObject) pair.getKey()).asJavaString(), (IRubyObject) pair.getValue());
+        }
+
         OptionsReader opts = new OptionsReader(context, vOpts);
 
         ByteList indent = opts.getString("indent");
@@ -498,7 +520,35 @@ public class GeneratorState extends RubyObject {
         result.op_aset(context, runtime.newSymbol("max_nesting"), max_nesting_get(context));
         result.op_aset(context, runtime.newSymbol("depth"), depth_get(context));
         result.op_aset(context, runtime.newSymbol("buffer_initial_length"), buffer_initial_length_get(context));
+        for (String name: getInstanceVariableNameList()) {
+            result.op_aset(context, runtime.newString(name), getInstanceVariable(name));
+        }
         return result;
+    }
+
+    /**
+     * <code>State#to_hash()</code>
+     *
+     * <p>Returns the configuration instance variables as a hash, that can be
+     * passed to the configure method.
+     * @return
+     */
+    @JRubyMethod
+    public RubyHash to_hash(ThreadContext context) {
+        return to_h(context);
+    }
+
+    @JRubyMethod(rest = true)
+    public RubyObject method_missing(ThreadContext context, IRubyObject args[]) {
+        System.out.println(((IRubyObject) args[0]).asString() + " " + args.length);
+        if (args.length == 0) {
+            return null;
+        } else if (args.length == 1) {
+            return (RubyObject) op_aref(context, ((IRubyObject) args[0]).asString());
+        } else {
+            IRubyObject name = ((IRubyObject) args[0]).asString().chop(context);
+            return (RubyObject) op_aset(context, name, args[1]);
+        }
     }
 
     public int increaseDepth() {

@@ -250,22 +250,32 @@ EOT
   end
 
   def test_hash_likeness_set_symbol
-    state = JSON.state.new
+    state = JSON.state.new :baz => true
+    assert_equal true, state[:baz]
+    assert_equal true, state['baz']
+    assert_equal nil, state[:foo]
+    assert_equal nil, state['foo']
     state[:foo] = :bar
     assert_equal :bar, state[:foo]
     assert_equal :bar, state['foo']
     state_hash = state.to_hash
+    assert_equal true, state_hash[:baz]
     assert_kind_of Hash, state_hash
     assert_equal :bar, state_hash[:foo]
     assert_equal :bar, state['foo']
   end
 
   def test_hash_likeness_set_string
-    state = JSON.state.new
+    state = JSON.state.new :baz => true
+    assert_equal true, state[:baz]
+    assert_equal true, state['baz']
+    assert_equal nil, state[:foo]
+    assert_equal nil, state['foo']
     state['foo'] = :bar
     assert_equal :bar, state[:foo]
     assert_equal :bar, state['foo']
     state_hash = state.to_hash
+    assert_equal true, state_hash[:baz]
     assert_kind_of Hash, state_hash
     assert_equal :bar, state_hash[:foo]
     assert_equal :bar, state['foo']

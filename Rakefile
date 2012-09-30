@@ -257,7 +257,11 @@ if defined?(RUBY_ENGINE) and RUBY_ENGINE == 'jruby'
   end
 
   desc "Testing library (jruby)"
-  task :test_ext => [ :create_jar, :do_test_ext ]
+  task :test_ext => [ :create_jar, :do_test_ext2 ]
+
+  task :do_test_ext2 do
+    exit system("env JSON=ext #{BUNDLE} exec rake do_test_ext") ? 0 : 1
+  end
 
   UndocumentedTestTask.new do |t|
     t.name = 'do_test_ext'
